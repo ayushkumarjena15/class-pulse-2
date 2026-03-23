@@ -354,14 +354,14 @@ function DashboardContent() {
               <CardContent className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={progressData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} tickMargin={12} />
-                    <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} tickMargin={12} stroke="var(--muted-foreground)" />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} stroke="var(--muted-foreground)" />
                     <Tooltip 
-                      cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: 5 }} 
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                      cursor={{ stroke: 'var(--primary)', strokeWidth: 1, strokeDasharray: 5 }} 
+                      contentStyle={{ backgroundColor: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--foreground)' }}
                     />
-                    <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={3} activeDot={{ r: 8, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2 }} />
+                    <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, fill: "var(--background)", stroke: "var(--primary)", strokeWidth: 2 }} activeDot={{ r: 8, fill: "var(--primary)", stroke: "var(--background)", strokeWidth: 2 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
