@@ -795,7 +795,9 @@ function DashboardContent() {
               {leaderboard.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">No student data available yet.</div>
               ) : (
-                <div className="space-y-3">
+                <div className="relative">
+                  <div className="absolute left-[33px] top-9 bottom-9 w-px bg-slate-200 dark:bg-white/25 z-0" />
+                <div className="space-y-3 relative z-10">
                   {leaderboard.map((student, index) => {
                     const isMe = student.id === currentUserId;
                     const rankColors = ['text-yellow-500', 'text-slate-400', 'text-amber-600'];
@@ -840,6 +842,7 @@ function DashboardContent() {
                       </motion.div>
                     );
                   })}
+                </div>
                 </div>
               )}
             </CardContent>
