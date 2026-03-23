@@ -62,6 +62,12 @@ function DashboardContent() {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [studentMarks, setStudentMarks] = useState<any[]>([]);
 
+  // Submission Modal States
+  const [submitAssignmentOpen, setSubmitAssignmentOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   useEffect(() => {
     async function loadResources() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -152,14 +158,46 @@ function DashboardContent() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => {
          toast.success("Live Update: New course material uploaded.");
-         loadResources();
+        loadResources();
       })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeAllChannels();
     };
-  }, []);
+  }, [router]);
+
+  const handleSubmissionUpload = async () => {
+    if (!submissionFile || !selectedAssignment) { toast.error("Please select a file to submit"); return; }
+    setIsSubmitting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    const fileExt = submissionFile.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `submissions/${fileName}`;
+    
+    const { error: uploadError } = await supabase.storage.from('class_resources').upload(filePath, submissionFile);
+    if (uploadError) { toast.error("Upload failed: " + uploadError.message); setIsSubmitting(false); return; }
+    
+    const { data: publicData } = supabase.storage.from('class_resources').getPublicUrl(filePath);
+    
+    await supabase.from('assignment_submissions').delete().match({ student_id: session?.user?.id, assignment_id: selectedAssignment.id });
+    
+    const { error } = await supabase.from('assignment_submissions').insert({
+      student_id: session?.user?.id,
+      assignment_id: selectedAssignment.id,
+      file_url: publicData.publicUrl,
+      status: "pending"
+    });
+    
+    setIsSubmitting(false);
+    if (!error) {
+      toast.success("Assignment submitted to teacher successfully!");
+      setSubmitAssignmentOpen(false);
+      setSelectedAssignment(null);
+      setSubmissionFile(null);
+    } else { toast.error(error.message); }
+  };
 
   const handleSaveProfile = async () => {
     if (!formData.name || !formData.rollno || !formData.registration_no) {
@@ -598,7 +636,12 @@ function DashboardContent() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                           <Button size="sm" variant="outline" className="border-primary/30 text-primary h-7">Submit Hand-in</Button>
+                           <div className="flex items-center justify-end gap-2">
+                             {assignment.file_url && (
+                               <Button size="sm" variant="outline" className="border-secondary text-secondary-foreground h-7" onClick={() => window.open(assignment.file_url, '_blank')}><LinkIcon className="w-3 h-3 mr-1"/> Download</Button>
+                             )}
+                             <Button size="sm" variant="outline" className="border-primary/30 text-primary h-7" onClick={() => { setSelectedAssignment(assignment); setSubmitAssignmentOpen(true); }}>Submit Hand-in</Button>
+                           </div>
                         </TableCell>
                       </TableRow>
                     ))}

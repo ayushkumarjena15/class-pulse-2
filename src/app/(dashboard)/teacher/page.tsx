@@ -38,6 +38,17 @@ function TeacherDashboardContent() {
   const [attendanceConfig, setAttendanceConfig] = useState({ day: "", date: "", time: "" });
   const [attendanceLocked, setAttendanceLocked] = useState(false);
 
+  // Material & Assignment Modals
+  const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [materialTitle, setMaterialTitle] = useState("");
+  const [assignmentTitle, setAssignmentTitle] = useState("");
+  const [assignmentDeadline, setAssignmentDeadline] = useState("");
+  const [assignmentGivenDate, setAssignmentGivenDate] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingSubmissions, setPendingSubmissions] = useState<any[]>([]);
+
   // Marks state
   const [marksForm, setMarksForm] = useState({ student_id: "", student_name: "", cycle_test_1: "", cycle_test_2: "", term_grade: "", cgpa: "" });
   const [isSavingMarks, setIsSavingMarks] = useState(false);
@@ -88,6 +99,21 @@ function TeacherDashboardContent() {
       const { data: matData } = await supabase.from('materials').select('*').eq('teacher_id', session?.user?.id);
       if (matData) setMaterials(matData);
 
+      // Load pending submissions
+      const { data: myAsgmts } = await supabase.from('assignments').select('id, title').eq('teacher_id', session?.user?.id);
+      if (myAsgmts && myAsgmts.length > 0) {
+        const asgmtIds = myAsgmts.map(a => a.id);
+        const { data: pSubs } = await supabase.from('assignment_submissions').select('*').in('assignment_id', asgmtIds).eq('status', 'pending');
+        if (pSubs) {
+          const mappedSubs = pSubs.map(ps => {
+            const student = sData?.find(s => s.id === ps.student_id); // Use sData from earlier student load
+            const asgmt = myAsgmts.find(a => a.id === ps.assignment_id);
+            return { ...ps, student_name: student?.name || "Unknown", assignment_title: asgmt?.title || "Unknown" };
+          });
+          setPendingSubmissions(mappedSubs);
+        }
+      }
+      
       // Load existing marks entered by this teacher
       if (session?.user) {
         const { data: marksData } = await supabase.from('student_marks').select('*').eq('teacher_id', session.user.id);
@@ -113,6 +139,9 @@ function TeacherDashboardContent() {
          loadData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => {
+         loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignment_submissions' }, (payload) => {
          loadData();
       })
       .subscribe();
@@ -165,48 +194,84 @@ function TeacherDashboardContent() {
     }
   };
 
-  const handleCreateAssignment = async () => {
-    const title = prompt("Enter assignment title:");
-    if (!title) return;
-    const due_date = prompt("Enter due date (YYYY-MM-DD):");
-    if (!due_date) return;
-    
+  const handleCreateAssignmentSubmit = async () => {
+    if (!assignmentTitle || !assignmentDeadline || !assignmentGivenDate) { alert("Please fill all assignment fields."); return; }
+    setIsUploading(true);
     const { data: { session } } = await supabase.auth.getSession();
+    
+    let fileUrl = null;
+    if (uploadFile) {
+      const fileExt = uploadFile.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `assignments/${fileName}`;
+      const { error: uploadError } = await supabase.storage.from('class_resources').upload(filePath, uploadFile);
+      if (uploadError) { alert("Upload failed: " + uploadError.message); setIsUploading(false); return; }
+      const { data: publicData } = supabase.storage.from('class_resources').getPublicUrl(filePath);
+      fileUrl = publicData.publicUrl;
+    }
+    
     const { error } = await supabase.from('assignments').insert({
       teacher_id: session?.user?.id,
       subject: teacherProfile?.subject || "Subject",
-      title,
-      due_date: new Date(due_date).toISOString(),
+      title: assignmentTitle,
+      due_date: new Date(assignmentDeadline).toISOString(),
+      given_date: new Date(assignmentGivenDate).toISOString(),
+      file_url: fileUrl
     });
     
+    setIsUploading(false);
     if (!error) {
       alert("Assignment published securely!");
-      window.location.reload();
-    } else {
-      alert(error.message);
-    }
+      setIsAssignmentModalOpen(false);
+      setAssignmentTitle("");
+      setAssignmentDeadline("");
+      setAssignmentGivenDate("");
+      setUploadFile(null);
+      const { data: aData } = await supabase.from('assignments').select('*').eq('teacher_id', session?.user?.id);
+      if (aData) setAssignments(aData);
+    } else { alert(error.message); }
   };
 
-  const handleUploadMaterial = async () => {
-    const title = prompt("Enter material title:");
-    if (!title) return;
-    const link = prompt("Enter material link (URL):");
-    if (!link) return;
-    
+  const handleUploadMaterialSubmit = async () => {
+    if (!materialTitle || !uploadFile) { alert("Please provide both title and a file to upload."); return; }
+    setIsUploading(true);
     const { data: { session } } = await supabase.auth.getSession();
+    
+    const fileExt = uploadFile.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `materials/${fileName}`;
+    
+    const { error: uploadError } = await supabase.storage.from('class_resources').upload(filePath, uploadFile);
+    if (uploadError) { alert("Upload failed: " + uploadError.message); setIsUploading(false); return; }
+    
+    const { data: publicData } = supabase.storage.from('class_resources').getPublicUrl(filePath);
+    
     const { error } = await supabase.from('materials').insert({
       teacher_id: session?.user?.id,
       subject: teacherProfile?.subject || "Subject",
-      title,
-      link
+      title: materialTitle,
+      link: publicData.publicUrl
     });
     
+    setIsUploading(false);
     if (!error) {
       alert("Material uploaded securely!");
+      setIsMaterialModalOpen(false);
+      setMaterialTitle("");
+      setUploadFile(null);
+      const { data: matData } = await supabase.from('materials').select('*').eq('teacher_id', session?.user?.id);
+      if (matData) setMaterials(matData);
+    } else { alert(error.message); }
+  };
+
+  const handleApproveSubmission = async (studentId: string, assignmentId: string) => {
+    const { error } = await supabase.from('assignment_submissions')
+      .update({ status: 'approved', score: 100 })
+      .match({ student_id: studentId, assignment_id: assignmentId });
+    if (!error) {
+      alert("Submission Approved and scored!");
       window.location.reload();
-    } else {
-      alert(error.message);
-    }
+    } else { alert(error.message); }
   };
 
   const markAttendance = async (studentId: string, studentName: string, status: string) => {
@@ -364,10 +429,10 @@ function TeacherDashboardContent() {
           <p className="text-muted-foreground mt-1 text-lg">Manage {teacherProfile?.subject ? `your ${teacherProfile.subject}` : 'your'} curriculum, students, and timetable seamlessly.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handleUploadMaterial} className="border-primary/20 hover:bg-primary/5">
+          <Button variant="outline" onClick={() => setIsMaterialModalOpen(true)} className="border-primary/20 hover:bg-primary/5">
             <Upload className="h-4 w-4 mr-2" /> Upload Material
           </Button>
-          <Button onClick={handleCreateAssignment} className="shadow-lg shadow-primary/20">
+          <Button onClick={() => setIsAssignmentModalOpen(true)} className="shadow-lg shadow-primary/20">
             <Plus className="h-4 w-4 mr-2" /> Create Assignment
           </Button>
         </div>
@@ -494,7 +559,7 @@ function TeacherDashboardContent() {
                 <CardTitle>Manage Assignments</CardTitle>
                 <CardDescription>Published tasks synced real-time from Supabase.</CardDescription>
               </div>
-              <Button size="sm" onClick={handleCreateAssignment}><Plus className="w-4 h-4 mr-1"/> New</Button>
+              <Button size="sm" onClick={() => setIsAssignmentModalOpen(true)}><Plus className="w-4 h-4 mr-1"/> New</Button>
             </CardHeader>
             <CardContent>
               {assignments.length === 0 ? (
@@ -525,6 +590,46 @@ function TeacherDashboardContent() {
               )}
             </CardContent>
           </Card>
+
+           <Card className="border-border/50 shadow-sm mt-8">
+            <CardHeader>
+              <CardTitle>Pending Submissions</CardTitle>
+              <CardDescription>Review and approve hand-ins sent by your students.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pendingSubmissions.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">No pending submissions right now.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Assignment</TableHead>
+                      <TableHead>Turned In</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingSubmissions.map((sub, i) => (
+                      <TableRow key={sub.id || i}>
+                        <TableCell className="font-medium">{sub.student_name}</TableCell>
+                        <TableCell className="text-muted-foreground">{sub.assignment_title}</TableCell>
+                        <TableCell className="text-muted-foreground"><Clock className="w-3 h-3 inline mr-1"/> {new Date(sub.created_at || new Date()).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                             {sub.file_url && (
+                               <Button size="sm" variant="outline" className="text-secondary" onClick={() => window.open(sub.file_url, '_blank')}><Eye className="w-3 h-3 mr-1"/> View Work</Button>
+                             )}
+                             <Button size="sm" variant="default" className="bg-primary" onClick={() => handleApproveSubmission(sub.student_id, sub.assignment_id)}><CheckSquare className="w-3 h-3 mr-1"/> Approve</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="materials">
@@ -534,7 +639,7 @@ function TeacherDashboardContent() {
                 <CardTitle>Course Materials</CardTitle>
                 <CardDescription>Published resources for your students.</CardDescription>
               </div>
-              <Button size="sm" onClick={handleUploadMaterial}><Upload className="w-4 h-4 mr-1"/> Upload</Button>
+              <Button size="sm" onClick={() => setIsMaterialModalOpen(true)}><Upload className="w-4 h-4 mr-1"/> Upload</Button>
             </CardHeader>
             <CardContent>
               {materials.length === 0 ? (
@@ -969,6 +1074,63 @@ function TeacherDashboardContent() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Upload Material Modal */}
+      <Dialog open={isMaterialModalOpen} onOpenChange={setIsMaterialModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Course Material</DialogTitle>
+            <DialogDescription>Attach any syllabus, PPTs, or PDF from your system directly into the materials board.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Material Title</Label>
+              <Input placeholder="e.g. Chapter 1 PDF" value={materialTitle} onChange={(e) => setMaterialTitle(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Select File</Label>
+              <Input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+            </div>
+            <Button className="w-full mt-4" onClick={handleUploadMaterialSubmit} disabled={isUploading}>
+               {isUploading ? "Uploading..." : "Upload Material"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Assignment Modal */}
+      <Dialog open={isAssignmentModalOpen} onOpenChange={setIsAssignmentModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Assignment</DialogTitle>
+            <DialogDescription>Define strict deadlines and securely attach reference documents for hand-ins.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Assignment Title</Label>
+              <Input placeholder="e.g. React Hooks Project" value={assignmentTitle} onChange={(e) => setAssignmentTitle(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Date Given</Label>
+                <Input type="date" value={assignmentGivenDate} onChange={(e) => setAssignmentGivenDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Deadline</Label>
+                <Input type="date" value={assignmentDeadline} onChange={(e) => setAssignmentDeadline(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Attach Question/File (Optional)</Label>
+              <Input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+            </div>
+            <Button className="w-full mt-4" onClick={handleCreateAssignmentSubmit} disabled={isUploading}>
+               {isUploading ? "Deploying Assignment..." : "Publish Task"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

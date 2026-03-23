@@ -113,9 +113,9 @@ export function DashboardHeader() {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-2">
                   <div>
-                    <p className="text-sm font-medium leading-none">{userData?.name || "Loading..."}</p>
+                    <p className="text-sm font-medium leading-none">&nbsp;</p>
                     <p className="text-xs leading-none text-muted-foreground mt-1">
-                      {userData?.email || "..."}
+                      @giet.edu
                     </p>
                   </div>
                   {userData?.rollno && (
