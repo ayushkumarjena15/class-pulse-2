@@ -161,16 +161,24 @@ function TeacherDashboardContent() {
 
   const markAttendance = async (studentId: string, studentName: string, status: string) => {
     const { data: { session } } = await supabase.auth.getSession();
-    const { error } = await supabase.from('attendance_records').insert({
+    const { data, error } = await supabase.from('attendance_records').insert({
       teacher_id: session?.user?.id,
       subject: teacherProfile?.subject || "Subject",
       student_id: studentId,
       student_name: studentName,
       status: status
-    });
+    }).select().single();
     
-    if (!error) alert(`Marked ${studentName} as ${status}.`);
-    else alert(error.message);
+    if (!error && data) {
+      const formattedTime = new Date(data.created_at || new Date()).toLocaleString(undefined, { 
+        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
+      });
+      alert(`Marked ${studentName} as ${status} on ${formattedTime}`);
+    } else if (!error) {
+      alert(`Marked ${studentName} as ${status}.`);
+    } else {
+      alert(error.message);
+    }
   };
 
   // Algorithm to deduce global timetable

@@ -383,14 +383,24 @@ function DashboardContent() {
                            <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/30">
-                                  <TableHead>Date</TableHead>
+                                  <TableHead>Date & Time</TableHead>
                                   <TableHead className="text-right">Status</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {data.logs.map((log: any) => (
                                   <TableRow key={log.id}>
-                                    <TableCell className="text-xs">{new Date(log.created_at || new Date()).toLocaleDateString()}</TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {new Date(log.created_at || new Date()).toLocaleString(undefined, { 
+                                        weekday: 'short', 
+                                        year: 'numeric', 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        hour: 'numeric', 
+                                        minute: '2-digit', 
+                                        hour12: true 
+                                      })}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                       <Badge variant="outline" className={log.status === 'present' ? 'text-green-500 border-green-500/30 bg-green-500/10' : 'text-red-500 border-red-500/30 bg-red-500/10'}>{log.status.toUpperCase()}</Badge>
                                     </TableCell>
