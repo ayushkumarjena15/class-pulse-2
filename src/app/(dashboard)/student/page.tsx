@@ -100,8 +100,16 @@ function DashboardContent() {
          const { data: mData } = await supabase.from('proctor_meets').select('*').or(`student_email.eq.${session.user.email},student_email.eq.all`);
          if (mData) setMeets(mData);
          
-         const { data: aData } = await supabase.from('assignments').select('*').order('created_at', { ascending: false });
-         if (aData) setAssignments(aData);
+         const { data: aData } = await supabase.from('assignments').select('*').order('due_date', { ascending: true });
+         const { data: mySubs } = await supabase.from('assignment_submissions').select('assignment_id').eq('student_id', session.user.id);
+         
+         if (aData) {
+            const mappedAssignments = aData.map(a => {
+              const isSubmitted = mySubs?.some(sub => sub.assignment_id === a.id);
+              return { ...a, status: isSubmitted ? 'submitted' : 'pending' };
+            });
+            setAssignments(mappedAssignments);
+         }
          
          const { data: attData } = await supabase.from('attendance_records').select('*').eq('student_id', session.user.id);
          if (attData) setAttendanceRecords(attData);
@@ -204,6 +212,9 @@ function DashboardContent() {
     if (!error) {
       toast.success("Assignment submitted to teacher successfully!");
       setSubmitAssignmentOpen(false);
+      
+      setAssignments(prev => prev.map(a => a.id === selectedAssignment?.id ? { ...a, status: 'submitted' } : a));
+      
       setSelectedAssignment(null);
       setSubmissionFile(null);
     } else { toast.error(error.message); }
@@ -275,8 +286,8 @@ function DashboardContent() {
 
   if (loading) return <div className="p-12 text-center text-muted-foreground animate-pulse flex flex-col items-center justify-center">Loading your dashboard...</div>;
 
-  const pendingAssignmentsCount = assignments.filter(a => a.status === 'pending' || !a.status).length;
-  const completedAssignments = assignments.filter(a => a.status === 'completed' || a.status === 'submitted').length;
+  const pendingAssignmentsCount = assignments.filter(a => a.status === 'pending').length;
+  const completedAssignments = assignments.filter(a => a.status === 'submitted').length;
   
   const presentCount = attendanceRecords.filter(r => r.status === 'present').length;
   const totalClasses = attendanceRecords.length;
@@ -297,7 +308,15 @@ function DashboardContent() {
           <h2 className="text-3xl font-bold tracking-tight">Welcome back, {studentName} 👋</h2>
           <p className="text-muted-foreground mt-1 text-lg">Your academic command center.</p>
         </div>
-        <Button className="rounded-full shadow-lg shadow-primary/20"><FileUp className="w-4 h-4 mr-2" /> Submit Work</Button>
+        <Button onClick={() => {
+           const pending = assignments.filter(a => a.status === 'pending');
+           if (pending.length > 0) {
+             setSelectedAssignment(pending[0]);
+             setSubmitAssignmentOpen(true);
+           } else {
+             toast.success("No pending assignments left! You're fully caught up.");
+           }
+        }} className="rounded-full shadow-lg shadow-primary/20"><FileUp className="w-4 h-4 mr-2" /> Submit Work</Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -650,7 +669,11 @@ function DashboardContent() {
                              {assignment.file_url && (
                                <Button size="sm" variant="outline" className="border-secondary text-secondary-foreground h-7" onClick={() => window.open(assignment.file_url, '_blank')}><LinkIcon className="w-3 h-3 mr-1"/> Download</Button>
                              )}
-                             <Button size="sm" variant="outline" className="border-primary/30 text-primary h-7" onClick={() => { setSelectedAssignment(assignment); setSubmitAssignmentOpen(true); }}>Submit Hand-in</Button>
+                             {assignment.status === 'submitted' ? (
+                               <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/30 px-3 cursor-default"><CheckCircle className="w-3 h-3 mr-1"/> Submitted</Badge>
+                             ) : (
+                               <Button size="sm" variant="outline" className="border-primary/30 text-primary h-7" onClick={() => { setSelectedAssignment(assignment); setSubmitAssignmentOpen(true); }}>Submit Hand-in</Button>
+                             )}
                            </div>
                         </TableCell>
                       </TableRow>
