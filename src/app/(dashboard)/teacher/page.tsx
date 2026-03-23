@@ -72,6 +72,26 @@ function TeacherDashboardContent() {
       setLoading(false);
     }
     loadData();
+
+    // Set up Realtime Subscriptions
+    const channel = supabase.channel('teacher_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, (payload) => {
+         loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, (payload) => {
+         loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, (payload) => {
+         loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'proctor_meets' }, (payload) => {
+         loadData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleScheduleMeet = async () => {

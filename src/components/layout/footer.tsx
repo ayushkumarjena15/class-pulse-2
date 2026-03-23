@@ -22,9 +22,10 @@ export function Footer() {
           <div className="space-y-4">
             <h4 className="font-semibold text-foreground tracking-tight">Platform</h4>
             <ul className="space-y-2">
-              <li><Link href="#features" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors">Features</Link></li>
-              <li><Link href="#demo" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors">Demo</Link></li>
-              <li><Link href="#pricing" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors">Pricing</Link></li>
+              <li><Link href="/" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors">Home</Link></li>
+              <li><Link href="/#demo" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors">Dashboard</Link></li>
+              <li><Link href="/#features" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors">Features</Link></li>
+              <li><Link href="/#how-it-works" className="text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors">How it Works</Link></li>
             </ul>
           </div>
           

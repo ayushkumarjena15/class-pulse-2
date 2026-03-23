@@ -101,6 +101,10 @@ function DashboardContent() {
          toast.success("Live Update: Task active status modified by Faculty.");
          loadResources();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'proctor_meets' }, (payload) => {
+         toast.success("Live Update: Proctor meet scheduled/updated.");
+         loadResources();
+      })
       .subscribe();
 
     return () => {
