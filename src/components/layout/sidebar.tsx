@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { Suspense } from "react";
 import { 
   BookOpen, 
   LayoutDashboard, 
@@ -14,7 +15,9 @@ import {
   ChevronLeft, 
   ChevronRight,
   Bell,
-  LogOut
+  LogOut,
+  Video,
+  Map
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,22 +27,38 @@ interface SidebarProps {
 }
 
 const teacherLinks = [
-  { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
-  { name: "Assignments", href: "/teacher/assignments", icon: FileText },
-  { name: "Attendance", href: "/teacher/attendance", icon: Users },
-  { name: "Analytics", href: "/teacher/analytics", icon: BarChart },
+  { name: "Dashboard", href: "/teacher?tab=overview", match: "overview", icon: LayoutDashboard },
+  { name: "Assignments", href: "/teacher?tab=assignments", match: "assignments", icon: FileText },
+  { name: "Attendance", href: "/teacher?tab=attendance", match: "attendance", icon: Users },
+  { name: "Timetable", href: "/teacher?tab=timetable", match: "timetable", icon: BookOpen },
+  { name: "Proctor Meets", href: "/teacher?tab=meets", match: "meets", icon: Video },
 ];
 
 const studentLinks = [
-  { name: "Dashboard", href: "/student", icon: LayoutDashboard },
-  { name: "Assignments", href: "/student/assignments", icon: FileText },
-  { name: "Progress", href: "/student/progress", icon: BarChart },
+  { name: "Dashboard", href: "/student?tab=overview", match: "/student?tab=overview", exact: true },
+  { name: "Assignments", href: "/student?tab=assignments", match: "/student?tab=assignments" },
+  { name: "Progress", href: "/student?tab=attendance", match: "/student?tab=attendance" },
+  { name: "Proctor Meets", href: "/student?tab=meets", match: "/student?tab=meets" },
 ];
 
-export function Sidebar({ role }: SidebarProps) {
+function SidebarContent({ role }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
-  const links = role === "teacher" ? teacherLinks : studentLinks;
+  const searchParams = useSearchParams();
+  const tab = searchParams.get('tab');
+  
+  // Re-map student links to include icons since we had to add match objects
+  const finalStudentLinks = [
+    { name: "Dashboard", href: "/student?tab=overview", match: "overview", icon: LayoutDashboard },
+    { name: "Timetable", href: "/student?tab=timetable", match: "timetable", icon: BookOpen },
+    { name: "Attendance", href: "/student?tab=attendance", match: "attendance", icon: Users },
+    { name: "Assignments", href: "/student?tab=assignments", match: "assignments", icon: FileText },
+    { name: "Progress", href: "/student?tab=progress", match: "progress", icon: BarChart },
+    { name: "Roadmap", href: "/student?tab=roadmap", match: "roadmap", icon: Map },
+    { name: "Proctor Meets", href: "/student?tab=meets", match: "meets", icon: Video },
+  ];
+  
+  const links = role === "teacher" ? teacherLinks : finalStudentLinks;
 
   return (
     <motion.aside
@@ -80,7 +99,16 @@ export function Sidebar({ role }: SidebarProps) {
           {!isCollapsed && <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Main Menu</p>}
         </div>
         {links.map((link) => {
-          const isActive = pathname === link.href;
+          let isActive = false;
+          if (role === 'student' && pathname === '/student') {
+            const currentTab = tab || 'overview';
+            isActive = 'match' in link && link.match === currentTab;
+          } else if (role === 'teacher' && pathname === '/teacher') {
+            const currentTab = tab || 'overview';
+            isActive = 'match' in link && link.match === currentTab;
+          } else {
+             isActive = pathname === link.href;
+          }
           return (
             <Link key={link.name} href={link.href}>
               <div
@@ -108,8 +136,8 @@ export function Sidebar({ role }: SidebarProps) {
             {!isCollapsed && <span className="font-medium">Settings</span>}
           </div>
         </Link>
-        <Link href="/login">
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-destructive hover:bg-destructive/10 transition-all group">
+        <Link href="/login" onClick={() => supabase.auth.signOut()}>
+          <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-destructive hover:bg-destructive/10 transition-all group cursor-pointer">
             <LogOut className="h-5 w-5 flex-shrink-0" />
             {!isCollapsed && <span className="font-medium">Logout</span>}
           </div>
@@ -117,4 +145,14 @@ export function Sidebar({ role }: SidebarProps) {
       </div>
     </motion.aside>
   );
+}
+
+import { supabase } from "@/lib/supabase";
+
+export function Sidebar({ role }: SidebarProps) {
+  return (
+    <Suspense fallback={<div className="w-64 h-screen bg-card border-r border-border/50 sticky top-0" />}>
+      <SidebarContent role={role} />
+    </Suspense>
+  )
 }
