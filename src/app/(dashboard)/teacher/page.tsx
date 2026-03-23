@@ -73,6 +73,8 @@ function TeacherDashboardContent() {
     async function loadData() {
       // Load current user context
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push("/login"); return; }
+      
       if (session?.user) {
         setTeacherProfile(session.user.user_metadata);
       }
@@ -87,6 +89,14 @@ function TeacherDashboardContent() {
 
       // Load assignments for this teacher
       if (session?.user) {
+        // Load teacher profile
+        const { data: teacherData, error: tError } = await supabase.from('teachers').select('*').eq('id', session.user.id).single();
+        if (teacherData) {
+           setTeacherProfile(teacherData);
+        } else {
+           const { data: studentData } = await supabase.from('students').select('id').eq('id', session.user.id).single();
+           if (studentData) { window.location.href = "/student"; return; }
+        }
         const { data: aData } = await supabase.from('assignments').select('*').eq('teacher_id', session.user.id);
         if (aData) setAssignments(aData);
       }

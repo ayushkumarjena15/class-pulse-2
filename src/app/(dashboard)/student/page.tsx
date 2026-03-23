@@ -71,12 +71,22 @@ function DashboardContent() {
   useEffect(() => {
     async function loadResources() {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+      
       if (session?.user) {
+        // Route Guard
+        const { data: teacherData } = await supabase.from('teachers').select('id').eq('id', session.user.id).single();
+        if (teacherData) { window.location.href = '/teacher'; return; }
+
         const meta = session.user.user_metadata || {};
-        setStudentName(meta.name || meta.full_name || "Student");
+        const { data: dbProfile } = await supabase.from('students').select('name').eq('id', session.user.id).single();
+        setStudentName(dbProfile?.name || meta.name || meta.full_name || "Student");
         
         if (!meta.rollno || !meta.registration_no) {
-          setFormData(prev => ({ ...prev, name: meta.name || meta.full_name || "" }));
+          setFormData(prev => ({ ...prev, name: dbProfile?.name || meta.name || meta.full_name || "" }));
           setShowOnboarding(true);
         }
       }

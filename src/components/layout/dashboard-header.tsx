@@ -41,13 +41,32 @@ export function DashboardHeader() {
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
         const meta = data.session.user.user_metadata || {};
+        
+        let dbName = meta.full_name || meta.name;
+        let dbRole = "student";
+        let dbRoll = meta.rollno;
+        let dbReg = meta.registration_no;
+        
+        const { data: tData } = await supabase.from('teachers').select('name').eq('id', data.session.user.id).single();
+        if (tData) {
+           dbName = tData.name;
+           dbRole = "teacher";
+        } else {
+           const { data: sData } = await supabase.from('students').select('name, rollno, registration_no').eq('id', data.session.user.id).single();
+           if (sData) {
+              dbName = sData.name;
+              dbRoll = sData.rollno;
+              dbReg = sData.registration_no;
+           }
+        }
+        
         setUserData({
-          name: meta.full_name || meta.name || "Student",
+          name: dbName || "User",
           email: data.session.user.email || "user@classpulse.com",
           avatarUrl: meta.avatar_url || null,
-          rollno: meta.rollno,
-          registration_no: meta.registration_no,
-          role: meta.role || "student"
+          rollno: dbRoll,
+          registration_no: dbReg,
+          role: dbRole
         });
       }
     }
