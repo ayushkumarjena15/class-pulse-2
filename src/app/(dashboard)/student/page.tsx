@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { motion } from "framer-motion";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
-import { BookOpen, CheckCircle, Clock, Award, FileUp, Calendar as CalendarIcon, UserCheck, FileText, Activity, Video, Link as LinkIcon, Map, CheckCircle2 } from "lucide-react";
+import { BookOpen, CheckCircle, Clock, Award, FileUp, Calendar as CalendarIcon, UserCheck, FileText, Activity, Video, Link as LinkIcon, Map, CheckCircle2, Trophy, Medal } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -57,6 +57,8 @@ function DashboardContent() {
   const [meets, setMeets] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
 
   useEffect(() => {
     async function loadResources() {
@@ -391,15 +393,19 @@ function DashboardContent() {
                                 {data.logs.map((log: any) => (
                                   <TableRow key={log.id}>
                                     <TableCell className="text-xs text-muted-foreground">
-                                      {new Date(log.created_at || new Date()).toLocaleString(undefined, { 
-                                        weekday: 'short', 
-                                        year: 'numeric', 
-                                        month: 'short', 
-                                        day: 'numeric', 
-                                        hour: 'numeric', 
-                                        minute: '2-digit', 
-                                        hour12: true 
-                                      })}
+                                      {log.day && log.date && log.time ? (
+                                        `${log.day}, ${log.date} at ${log.time}`
+                                      ) : (
+                                        new Date(log.created_at || new Date()).toLocaleString(undefined, { 
+                                          weekday: 'short', 
+                                          year: 'numeric', 
+                                          month: 'short', 
+                                          day: 'numeric', 
+                                          hour: 'numeric', 
+                                          minute: '2-digit', 
+                                          hour12: true 
+                                        })
+                                      )}
                                     </TableCell>
                                     <TableCell className="text-right">
                                       <Badge variant="outline" className={log.status === 'present' ? 'text-green-500 border-green-500/30 bg-green-500/10' : 'text-red-500 border-red-500/30 bg-red-500/10'}>{log.status.toUpperCase()}</Badge>

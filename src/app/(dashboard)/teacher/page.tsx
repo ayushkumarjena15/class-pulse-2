@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Users, FileText, Upload, Plus, AlertCircle, Calendar, BookOpen, Activity, CheckSquare, Clock, Video, Link as LinkIcon } from "lucide-react";
+import { Users, FileText, Upload, Plus, AlertCircle, Calendar, BookOpen, Activity, CheckSquare, Clock, Video, Link as LinkIcon, Trophy, Eye } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const classPerformance = [
   { name: "Quiz 1", avg: 85 },
@@ -33,6 +34,12 @@ function TeacherDashboardContent() {
   const [isScheduling, setIsScheduling] = useState(false);
   
   const [meetForm, setMeetForm] = useState({ student_email: "all", topic: "", meet_link: "", date: "", time: "" });
+
+  // Student profile modal state
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [studentModalOpen, setStudentModalOpen] = useState(false);
+  const [studentDetails, setStudentDetails] = useState<any>(null);
+  const [loadingStudentDetails, setLoadingStudentDetails] = useState(false);
 
   // Sync Tabs with URL
   const searchParams = useSearchParams();
@@ -161,24 +168,94 @@ function TeacherDashboardContent() {
 
   const markAttendance = async (studentId: string, studentName: string, status: string) => {
     const { data: { session } } = await supabase.auth.getSession();
+    
+    // Capture real-time exact strings dynamically
+    const now = new Date();
+    const dayString = now.toLocaleDateString('en-US', { weekday: 'long' }); // e.g., 'Monday'
+    const dateString = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); // e.g., 'October 25, 2023'
+    const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); // e.g., '10:30 AM'
+
     const { data, error } = await supabase.from('attendance_records').insert({
       teacher_id: session?.user?.id,
       subject: teacherProfile?.subject || "Subject",
       student_id: studentId,
       student_name: studentName,
-      status: status
+      status: status,
+      day: dayString,
+      date: dateString,
+      time: timeString
     }).select().single();
     
     if (!error && data) {
-      const formattedTime = new Date(data.created_at || new Date()).toLocaleString(undefined, { 
-        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
-      });
-      alert(`Marked ${studentName} as ${status} on ${formattedTime}`);
+      alert(`Marked ${studentName} as ${status} on ${data.day}, ${data.date} at ${data.time}`);
     } else if (!error) {
-      alert(`Marked ${studentName} as ${status}.`);
+      alert(`Marked ${studentName} as ${status} on ${dayString}, ${dateString} at ${timeString}`);
     } else {
       alert(error.message);
     }
+  };
+
+  const openStudentProfile = async (student: any) => {
+    setSelectedStudent(student);
+    setStudentDetails(null);
+    setStudentModalOpen(true);
+    setLoadingStudentDetails(true);
+
+    // Fetch this student's attendance
+    const { data: attData } = await supabase.from('attendance_records').select('*').eq('student_id', student.id);
+    // Fetch all attendance to compute rank
+    const { data: allAtt } = await supabase.from('attendance_records').select('student_id, status');
+    // Fetch this student's submissions
+    const { data: subsData } = await supabase.from('assignment_submissions').select('*').eq('student_id', student.id);
+    // Fetch all submissions for rank calc
+    const { data: allSubs } = await supabase.from('assignment_submissions').select('student_id, score');
+
+    // Per-student attendance map
+    const attMap: Record<string, { present: number; total: number }> = {};
+    (allAtt || []).forEach((r: any) => {
+      if (!attMap[r.student_id]) attMap[r.student_id] = { present: 0, total: 0 };
+      attMap[r.student_id].total++;
+      if (r.status === 'present') attMap[r.student_id].present++;
+    });
+
+    // Per-student submission count
+    const subMap: Record<string, number> = {};
+    (allSubs || []).forEach((s: any) => {
+      subMap[s.student_id] = (subMap[s.student_id] || 0) + 1;
+    });
+
+    // Calculate composite score for each student in DB
+    const totalAssignments = assignments.length || 1;
+    const scoreFor = (id: string) => {
+      const a = attMap[id] || { present: 0, total: 0 };
+      const attPct = a.total > 0 ? (a.present / a.total) * 100 : 0;
+      const subPct = ((subMap[id] || 0) / totalAssignments) * 100;
+      return attPct * 0.5 + subPct * 0.5;
+    };
+
+    const sortedIds = students.map(s => s.id).sort((a, b) => scoreFor(b) - scoreFor(a));
+    const rank = sortedIds.indexOf(student.id) + 1;
+
+    // This student's stats
+    const myAtt = attData || [];
+    const presentCount = myAtt.filter((r: any) => r.status === 'present').length;
+    const totalClasses = myAtt.length;
+    const attPct = totalClasses > 0 ? Math.round((presentCount / totalClasses) * 100) : 0;
+
+    const submissions = subsData || [];
+    const gradedSubs = submissions.filter((s: any) => s.score != null);
+    const avgScore = gradedSubs.length > 0 ? gradedSubs.reduce((sum: number, s: any) => sum + s.score, 0) / gradedSubs.length : null;
+    const cgpa = avgScore != null ? ((avgScore / 100) * 10).toFixed(1) : 'N/A';
+
+    setStudentDetails({
+      attendance: { present: presentCount, total: totalClasses, pct: attPct },
+      submittedCount: submissions.length,
+      pendingCount: Math.max(0, assignments.length - submissions.length),
+      cgpa,
+      rank,
+      totalStudents: students.length,
+    });
+    setLoadingStudentDetails(false);
   };
 
   // Algorithm to deduce global timetable
@@ -385,7 +462,7 @@ function TeacherDashboardContent() {
                         <TableHead className="w-[120px]">Roll No.</TableHead>
                         <TableHead>Student Name</TableHead>
                         <TableHead>Reg. Number</TableHead>
-                        <TableHead className="text-right">Mark Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -395,6 +472,7 @@ function TeacherDashboardContent() {
                           <TableCell>{student.name}</TableCell>
                           <TableCell className="text-muted-foreground text-xs">{student.registration_no}</TableCell>
                           <TableCell className="text-right space-x-2 whitespace-nowrap">
+                             <Button size="sm" variant="outline" onClick={() => openStudentProfile(student)} className="border-primary/30 text-primary h-7 mr-1"><Eye className="w-3 h-3 mr-1"/>View</Button>
                              <Button size="sm" variant="secondary" onClick={() => markAttendance(student.id, student.name, 'present')} className="bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border border-green-500/20">Present</Button>
                              <Button size="sm" variant="secondary" onClick={() => markAttendance(student.id, student.name, 'absent')} className="bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600 border border-red-500/20">Absent</Button>
                           </TableCell>
@@ -549,6 +627,72 @@ function TeacherDashboardContent() {
         </TabsContent>
 
       </Tabs>
+
+      {/* Student Profile Modal */}
+      <Dialog open={studentModalOpen} onOpenChange={setStudentModalOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                {selectedStudent?.name?.substring(0, 2).toUpperCase() || "NA"}
+              </div>
+              {selectedStudent?.name}
+            </DialogTitle>
+            <DialogDescription>{selectedStudent?.rollno} · {selectedStudent?.registration_no}</DialogDescription>
+          </DialogHeader>
+          {loadingStudentDetails ? (
+            <div className="py-10 text-center text-muted-foreground animate-pulse">Fetching student data...</div>
+          ) : studentDetails && (
+            <div className="space-y-5 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-border/50 rounded-xl p-4 text-center bg-muted/10">
+                  <div className="text-2xl font-bold text-primary">{studentDetails.cgpa}</div>
+                  <div className="text-xs text-muted-foreground mt-1">CGPA</div>
+                </div>
+                <div className="border border-border/50 rounded-xl p-4 text-center bg-muted/10">
+                  <div className="text-2xl font-bold flex items-center justify-center gap-1">
+                    <Trophy className="w-5 h-5 text-yellow-500" />#{studentDetails.rank}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">Class Rank of {studentDetails.totalStudents}</div>
+                </div>
+                <div className="border border-border/50 rounded-xl p-4 text-center bg-muted/10">
+                  <div className={`text-2xl font-bold ${studentDetails.attendance.pct < 75 ? 'text-destructive' : 'text-green-500'}`}>
+                    {studentDetails.attendance.pct}%
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">Attendance</div>
+                  <div className="text-[11px] text-muted-foreground">{studentDetails.attendance.present}/{studentDetails.attendance.total} classes</div>
+                </div>
+                <div className="border border-border/50 rounded-xl p-4 text-center bg-muted/10">
+                  <div className="text-2xl font-bold text-blue-500">{studentDetails.submittedCount}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Submitted</div>
+                  <div className="text-[11px] text-muted-foreground">{studentDetails.pendingCount} pending</div>
+                </div>
+              </div>
+              <div className="border border-border/50 rounded-xl p-4 space-y-2.5 bg-muted/5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Assignments Given</span>
+                  <span className="font-medium">{assignments.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Assignments Submitted</span>
+                  <span className="font-medium text-green-500">{studentDetails.submittedCount}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Pending Submissions</span>
+                  <span className={`font-medium ${studentDetails.pendingCount > 0 ? 'text-yellow-500' : 'text-muted-foreground'}`}>{studentDetails.pendingCount}</span>
+                </div>
+                <div className="h-px bg-border/50 my-1" />
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Attendance Status</span>
+                  <Badge variant="outline" className={studentDetails.attendance.pct < 75 ? 'border-destructive/50 text-destructive' : 'border-green-500/50 text-green-500'}>
+                    {studentDetails.attendance.pct < 75 ? 'Below Limit' : studentDetails.attendance.pct >= 90 ? 'Excellent' : 'Good'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
