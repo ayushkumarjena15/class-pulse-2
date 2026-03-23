@@ -60,6 +60,7 @@ function DashboardContent() {
   const [materials, setMaterials] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [studentMarks, setStudentMarks] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadResources() {
@@ -91,6 +92,10 @@ function DashboardContent() {
 
          const { data: matData } = await supabase.from('materials').select('*').order('created_at', { ascending: false });
          if (matData) setMaterials(matData);
+
+         // Fetch marks for this student
+         const { data: marksData } = await supabase.from('student_marks').select('*').eq('student_id', session.user.id);
+         if (marksData) setStudentMarks(marksData);
 
          // Leaderboard data
          setCurrentUserId(session.user.id);
@@ -471,36 +476,40 @@ function DashboardContent() {
             <Card className="border-border/50 shadow-sm">
               <CardHeader>
                 <CardTitle>Academic Progress</CardTitle>
-                <CardDescription>Cycle test performance and CGPA tracking across terms.</CardDescription>
+                <CardDescription>Marks entered by your faculty — live from the database.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Subject</TableHead>
-                      <TableHead>Cycle Test 1</TableHead>
-                      <TableHead>Cycle Test 2</TableHead>
-                      <TableHead>Term Grade</TableHead>
-                      <TableHead className="text-right">CGPA</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[
-                      { subject: "Data Structures", ct1: "88/100", ct2: "92/100", grade: "A", cgpa: "9.0" },
-                      { subject: "Database Mgmt", ct1: "74/100", ct2: "81/100", grade: "B+", cgpa: "8.5" },
-                      { subject: "Operating Sys", ct1: "95/100", ct2: "89/100", grade: "A+", cgpa: "9.5" },
-                      { subject: "Web Dev", ct1: "83/100", ct2: "88/100", grade: "A", cgpa: "9.0" },
-                    ].map((row, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-bold">{row.subject}</TableCell>
-                        <TableCell className="text-muted-foreground">{row.ct1}</TableCell>
-                        <TableCell className="text-muted-foreground">{row.ct2}</TableCell>
-                        <TableCell><Badge className="bg-primary/20 text-primary border-primary/20">{row.grade}</Badge></TableCell>
-                        <TableCell className="text-right font-bold text-green-500">{row.cgpa}</TableCell>
+                {studentMarks.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">
+                    No marks have been recorded by your faculty yet. Check back after assessments.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Subject</TableHead>
+                        <TableHead>Cycle Test 1</TableHead>
+                        <TableHead>Cycle Test 2</TableHead>
+                        <TableHead>Term Grade</TableHead>
+                        <TableHead className="text-right">CGPA</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {studentMarks.map((row) => {
+                        const gradeColor = row.term_grade === 'O' || row.term_grade === 'A+' ? 'bg-green-500/20 text-green-500 border-green-500/20' : row.term_grade === 'F' ? 'bg-destructive/20 text-destructive border-destructive/20' : 'bg-primary/20 text-primary border-primary/20';
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell className="font-bold">{row.subject}</TableCell>
+                            <TableCell className="text-muted-foreground">{row.cycle_test_1 != null ? `${row.cycle_test_1}/100` : '—'}</TableCell>
+                            <TableCell className="text-muted-foreground">{row.cycle_test_2 != null ? `${row.cycle_test_2}/100` : '—'}</TableCell>
+                            <TableCell><Badge className={gradeColor}>{row.term_grade || '—'}</Badge></TableCell>
+                            <TableCell className="text-right font-bold text-green-500">{row.cgpa ?? '—'}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -87,7 +87,13 @@ function TeacherDashboardContent() {
       // Load materials
       const { data: matData } = await supabase.from('materials').select('*').eq('teacher_id', session?.user?.id);
       if (matData) setMaterials(matData);
-      
+
+      // Load existing marks entered by this teacher
+      if (session?.user) {
+        const { data: marksData } = await supabase.from('student_marks').select('*').eq('teacher_id', session.user.id);
+        if (marksData) setExistingMarks(marksData);
+      }
+
       setLoading(false);
     }
     loadData();
@@ -307,6 +313,31 @@ function TeacherDashboardContent() {
       totalStudents: students.length,
     });
     setLoadingStudentDetails(false);
+  };
+
+  const handleSaveMarks = async () => {
+    if (!marksForm.student_id) { alert("Please select a student."); return; }
+    setIsSavingMarks(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const subject = teacherProfile?.subject || "Subject";
+    const { error } = await supabase.from('student_marks').upsert({
+      teacher_id: session?.user?.id,
+      student_id: marksForm.student_id,
+      student_name: marksForm.student_name,
+      subject,
+      cycle_test_1: marksForm.cycle_test_1 ? parseInt(marksForm.cycle_test_1) : null,
+      cycle_test_2: marksForm.cycle_test_2 ? parseInt(marksForm.cycle_test_2) : null,
+      term_grade: marksForm.term_grade || null,
+      cgpa: marksForm.cgpa ? parseFloat(marksForm.cgpa) : null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'student_id,subject' });
+    setIsSavingMarks(false);
+    if (!error) {
+      alert(`Marks saved for ${marksForm.student_name}!`);
+      setMarksForm({ student_id: "", student_name: "", cycle_test_1: "", cycle_test_2: "", term_grade: "", cgpa: "" });
+      const { data: marksData } = await supabase.from('student_marks').select('*').eq('teacher_id', session?.user?.id);
+      if (marksData) setExistingMarks(marksData);
+    } else { alert(error.message); }
   };
 
   // Algorithm to deduce global timetable
@@ -762,6 +793,107 @@ function TeacherDashboardContent() {
                           </TableCell>
                         </TableRow>
                       ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="marks">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+            {/* Entry Form */}
+            <Card className="lg:col-span-3 border-border/50 shadow-sm">
+              <CardHeader className="bg-muted/10 border-b border-border/50">
+                <CardTitle>Enter Student Marks</CardTitle>
+                <CardDescription>Subject: <span className="text-primary font-semibold">{teacherProfile?.subject || 'Your Subject'}</span></CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                <div className="space-y-2">
+                  <Label>Select Student</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={marksForm.student_id}
+                    onChange={(e) => {
+                      const s = students.find(st => st.id === e.target.value);
+                      setMarksForm({ ...marksForm, student_id: e.target.value, student_name: s?.name || "" });
+                    }}
+                  >
+                    <option value="">— Select a student —</option>
+                    {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.rollno})</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Cycle Test 1 <span className="text-muted-foreground text-xs">(/ 100)</span></Label>
+                    <Input type="number" min={0} max={100} placeholder="e.g. 88" value={marksForm.cycle_test_1} onChange={(e) => setMarksForm({ ...marksForm, cycle_test_1: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Cycle Test 2 <span className="text-muted-foreground text-xs">(/ 100)</span></Label>
+                    <Input type="number" min={0} max={100} placeholder="e.g. 92" value={marksForm.cycle_test_2} onChange={(e) => setMarksForm({ ...marksForm, cycle_test_2: e.target.value })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Term Grade</Label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={marksForm.term_grade}
+                      onChange={(e) => setMarksForm({ ...marksForm, term_grade: e.target.value })}
+                    >
+                      <option value="">— Grade —</option>
+                      {["O", "A+", "A", "B+", "B", "C", "F"].map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CGPA <span className="text-muted-foreground text-xs">(0–10)</span></Label>
+                    <Input type="number" min={0} max={10} step={0.1} placeholder="e.g. 9.0" value={marksForm.cgpa} onChange={(e) => setMarksForm({ ...marksForm, cgpa: e.target.value })} />
+                  </div>
+                </div>
+                <Button onClick={handleSaveMarks} disabled={isSavingMarks} className="w-full mt-2">
+                  {isSavingMarks ? "Saving..." : "Save / Update Marks"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Saved Marks Table */}
+            <Card className="lg:col-span-4 border-border/50 shadow-sm flex flex-col">
+              <CardHeader className="bg-muted/10 border-b border-border/50">
+                <CardTitle>Marks Record — {teacherProfile?.subject}</CardTitle>
+                <CardDescription>All marks you have entered for your subject.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 p-0 overflow-y-auto">
+                {existingMarks.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">No marks entered yet. Use the form to add grades.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/5">
+                        <TableHead>Student</TableHead>
+                        <TableHead className="text-center">CT1</TableHead>
+                        <TableHead className="text-center">CT2</TableHead>
+                        <TableHead className="text-center">Grade</TableHead>
+                        <TableHead className="text-right">CGPA</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {existingMarks.map(m => {
+                        const gradeColor = m.term_grade === 'O' || m.term_grade === 'A+' ? 'text-green-500' : m.term_grade === 'A' || m.term_grade === 'B+' ? 'text-primary' : m.term_grade === 'F' ? 'text-destructive' : '';
+                        return (
+                          <TableRow key={m.id}>
+                            <TableCell>
+                              <div className="font-medium text-sm">{m.student_name}</div>
+                            </TableCell>
+                            <TableCell className="text-center text-muted-foreground">{m.cycle_test_1 ?? '—'}/100</TableCell>
+                            <TableCell className="text-center text-muted-foreground">{m.cycle_test_2 ?? '—'}/100</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className={`${gradeColor} border-current/30`}>{m.term_grade || '—'}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-green-500">{m.cgpa ?? '—'}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}

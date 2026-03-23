@@ -32,6 +32,7 @@ const teacherLinks = [
   { name: "Assignments", href: "/teacher?tab=assignments", match: "assignments", icon: FileText },
   { name: "Materials", href: "/teacher?tab=materials", match: "materials", icon: BookOpen },
   { name: "Attendance", href: "/teacher?tab=attendance", match: "attendance", icon: Users },
+  { name: "Marks", href: "/teacher?tab=marks", match: "marks", icon: BarChart },
   { name: "Timetable", href: "/teacher?tab=timetable", match: "timetable", icon: BookOpen },
   { name: "Proctor Meets", href: "/teacher?tab=meets", match: "meets", icon: Video },
 ];
