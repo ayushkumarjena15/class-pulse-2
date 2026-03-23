@@ -29,6 +29,7 @@ function TeacherDashboardContent() {
   const [students, setStudents] = useState<any[]>([]);
   const [meets, setMeets] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
   const [teacherProfile, setTeacherProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isScheduling, setIsScheduling] = useState(false);
@@ -36,6 +37,11 @@ function TeacherDashboardContent() {
   const [meetForm, setMeetForm] = useState({ student_email: "all", topic: "", meet_link: "", date: "", time: "" });
   const [attendanceConfig, setAttendanceConfig] = useState({ day: "", date: "", time: "" });
   const [attendanceLocked, setAttendanceLocked] = useState(false);
+
+  // Marks state
+  const [marksForm, setMarksForm] = useState({ student_id: "", student_name: "", cycle_test_1: "", cycle_test_2: "", term_grade: "", cgpa: "" });
+  const [isSavingMarks, setIsSavingMarks] = useState(false);
+  const [existingMarks, setExistingMarks] = useState<any[]>([]);
 
   // Student profile modal state
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -77,6 +83,10 @@ function TeacherDashboardContent() {
       // Load scheduled meets
       const { data: mData } = await supabase.from('proctor_meets').select('*').eq('teacher_id', session?.user?.id);
       if (mData) setMeets(mData);
+
+      // Load materials
+      const { data: matData } = await supabase.from('materials').select('*').eq('teacher_id', session?.user?.id);
+      if (matData) setMaterials(matData);
       
       setLoading(false);
     }
@@ -94,6 +104,9 @@ function TeacherDashboardContent() {
          loadData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proctor_meets' }, (payload) => {
+         loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => {
          loadData();
       })
       .subscribe();
@@ -162,6 +175,28 @@ function TeacherDashboardContent() {
     
     if (!error) {
       alert("Assignment published securely!");
+      window.location.reload();
+    } else {
+      alert(error.message);
+    }
+  };
+
+  const handleUploadMaterial = async () => {
+    const title = prompt("Enter material title:");
+    if (!title) return;
+    const link = prompt("Enter material link (URL):");
+    if (!link) return;
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    const { error } = await supabase.from('materials').insert({
+      teacher_id: session?.user?.id,
+      subject: teacherProfile?.subject || "Subject",
+      title,
+      link
+    });
+    
+    if (!error) {
+      alert("Material uploaded securely!");
       window.location.reload();
     } else {
       alert(error.message);
@@ -298,10 +333,10 @@ function TeacherDashboardContent() {
           <p className="text-muted-foreground mt-1 text-lg">Manage {teacherProfile?.subject ? `your ${teacherProfile.subject}` : 'your'} curriculum, students, and timetable seamlessly.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="border-primary/20 hover:bg-primary/5">
+          <Button variant="outline" onClick={handleUploadMaterial} className="border-primary/20 hover:bg-primary/5">
             <Upload className="h-4 w-4 mr-2" /> Upload Material
           </Button>
-          <Button className="shadow-lg shadow-primary/20">
+          <Button onClick={handleCreateAssignment} className="shadow-lg shadow-primary/20">
             <Plus className="h-4 w-4 mr-2" /> Create Assignment
           </Button>
         </div>
@@ -451,6 +486,46 @@ function TeacherDashboardContent() {
                         <TableCell className="text-muted-foreground flex items-center gap-1.5 whitespace-nowrap pt-4"><Clock className="w-3 h-3"/> {new Date(assignment.due_date).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{assignment.difficulty}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="materials">
+           <Card className="border-border/50 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Course Materials</CardTitle>
+                <CardDescription>Published resources for your students.</CardDescription>
+              </div>
+              <Button size="sm" onClick={handleUploadMaterial}><Upload className="w-4 h-4 mr-1"/> Upload</Button>
+            </CardHeader>
+            <CardContent>
+              {materials.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">No materials uploaded yet.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Added On</TableHead>
+                      <TableHead className="text-right">Link</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {materials.map((mat) => (
+                      <TableRow key={mat.id}>
+                        <TableCell className="font-medium">{mat.title}</TableCell>
+                        <TableCell className="text-muted-foreground">{mat.subject}</TableCell>
+                        <TableCell className="text-muted-foreground flex items-center gap-1.5 whitespace-nowrap pt-4"><Clock className="w-3 h-3"/> {new Date(mat.created_at || new Date()).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" className="text-xs border-primary/30 text-primary h-7" onClick={() => window.open(mat.link, '_blank')}><LinkIcon className="w-3 h-3 mr-1"/> View</Button>
                         </TableCell>
                       </TableRow>
                     ))}

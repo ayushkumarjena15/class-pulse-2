@@ -30,6 +30,7 @@ interface SidebarProps {
 const teacherLinks = [
   { name: "Dashboard", href: "/teacher?tab=overview", match: "overview", icon: LayoutDashboard },
   { name: "Assignments", href: "/teacher?tab=assignments", match: "assignments", icon: FileText },
+  { name: "Materials", href: "/teacher?tab=materials", match: "materials", icon: BookOpen },
   { name: "Attendance", href: "/teacher?tab=attendance", match: "attendance", icon: Users },
   { name: "Timetable", href: "/teacher?tab=timetable", match: "timetable", icon: BookOpen },
   { name: "Proctor Meets", href: "/teacher?tab=meets", match: "meets", icon: Video },
@@ -38,6 +39,7 @@ const teacherLinks = [
 const studentLinks = [
   { name: "Dashboard", href: "/student?tab=overview", match: "/student?tab=overview", exact: true },
   { name: "Assignments", href: "/student?tab=assignments", match: "/student?tab=assignments" },
+  { name: "Materials", href: "/student?tab=materials", match: "/student?tab=materials" },
   { name: "Progress", href: "/student?tab=attendance", match: "/student?tab=attendance" },
   { name: "Proctor Meets", href: "/student?tab=meets", match: "/student?tab=meets" },
 ];
@@ -54,6 +56,7 @@ function SidebarContent({ role }: SidebarProps) {
     { name: "Timetable", href: "/student?tab=timetable", match: "timetable", icon: BookOpen },
     { name: "Attendance", href: "/student?tab=attendance", match: "attendance", icon: Users },
     { name: "Assignments", href: "/student?tab=assignments", match: "assignments", icon: FileText },
+    { name: "Materials", href: "/student?tab=materials", match: "materials", icon: BookOpen },
     { name: "Progress", href: "/student?tab=progress", match: "progress", icon: BarChart },
     { name: "Roadmap", href: "/student?tab=roadmap", match: "roadmap", icon: Map },
     { name: "Proctor Meets", href: "/student?tab=meets", match: "meets", icon: Video },

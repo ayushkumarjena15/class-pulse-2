@@ -57,6 +57,7 @@ function DashboardContent() {
   const [meets, setMeets] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
 
@@ -87,6 +88,9 @@ function DashboardContent() {
          
          const { data: attData } = await supabase.from('attendance_records').select('*').eq('student_id', session.user.id);
          if (attData) setAttendanceRecords(attData);
+
+         const { data: matData } = await supabase.from('materials').select('*').order('created_at', { ascending: false });
+         if (matData) setMaterials(matData);
 
          // Leaderboard data
          setCurrentUserId(session.user.id);
@@ -139,6 +143,10 @@ function DashboardContent() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proctor_meets' }, (payload) => {
          toast.success("Live Update: Proctor meet scheduled/updated.");
+         loadResources();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => {
+         toast.success("Live Update: New course material uploaded.");
          loadResources();
       })
       .subscribe();
@@ -589,6 +597,45 @@ function DashboardContent() {
                 </Table>
               ) : (
                 <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">No active tasks from your faculty right now.</div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="materials">
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Course Materials</CardTitle>
+                <CardDescription>Resources provided by your faculty.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {materials.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Resource Title</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Date Added</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {materials.map((mat) => (
+                      <TableRow key={mat.id}>
+                        <TableCell className="font-medium flex items-center gap-2"><FileText className="w-4 h-4 text-primary"/>{mat.title}</TableCell>
+                        <TableCell>{mat.subject}</TableCell>
+                        <TableCell className="text-muted-foreground whitespace-nowrap pt-3"><Clock className="w-3 h-3 inline-block mr-1"/> {new Date(mat.created_at || new Date()).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
+                           <Button size="sm" variant="outline" className="border-primary/30 text-primary h-7" onClick={() => window.open(mat.link, '_blank')}><LinkIcon className="w-3 h-3 mr-1"/>Open</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">No materials available right now.</div>
               )}
             </CardContent>
           </Card>
