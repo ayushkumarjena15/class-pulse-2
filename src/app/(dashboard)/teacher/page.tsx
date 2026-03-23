@@ -34,6 +34,8 @@ function TeacherDashboardContent() {
   const [isScheduling, setIsScheduling] = useState(false);
   
   const [meetForm, setMeetForm] = useState({ student_email: "all", topic: "", meet_link: "", date: "", time: "" });
+  const [attendanceConfig, setAttendanceConfig] = useState({ day: "", date: "", time: "" });
+  const [attendanceLocked, setAttendanceLocked] = useState(false);
 
   // Student profile modal state
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -167,13 +169,27 @@ function TeacherDashboardContent() {
   };
 
   const markAttendance = async (studentId: string, studentName: string, status: string) => {
+    if (!attendanceLocked) {
+      alert("Please start the attendance session by configuring Day, Date, and Time first.");
+      return;
+    }
+    
     const { data: { session } } = await supabase.auth.getSession();
     
-    // Capture real-time exact strings dynamically
-    const now = new Date();
-    const dayString = now.toLocaleDateString('en-US', { weekday: 'long' }); // e.g., 'Monday'
-    const dateString = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); // e.g., 'October 25, 2023'
-    const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); // e.g., '10:30 AM'
+    // Parse formatting reliably from fixed inputs
+    const dayString = attendanceConfig.day;
+    
+    const [year, month, day] = attendanceConfig.date.split('-');
+    const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const dateString = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    const [hourStr, minStr] = attendanceConfig.time.split(':');
+    let hour = parseInt(hourStr);
+    const min = minStr;
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12;
+    hour = hour ? hour : 12; 
+    const timeString = `${hour}:${min} ${ampm}`;
 
     const { data, error } = await supabase.from('attendance_records').insert({
       teacher_id: session?.user?.id,
@@ -452,6 +468,59 @@ function TeacherDashboardContent() {
               <CardDescription>Live real-time student tracking for your active class.</CardDescription>
             </CardHeader>
             <CardContent>
+              {!attendanceLocked ? (
+                <div className="mb-6 p-4 border rounded-xl bg-muted/20 space-y-4">
+                  <h3 className="font-semibold text-lg flex items-center"><Calendar className="w-5 h-5 mr-2 text-primary" /> Start Attendance Session</h3>
+                  <p className="text-sm text-muted-foreground">Please configure the exact date and time for this attendance record before marking.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <div className="space-y-2">
+                       <Label>Day</Label>
+                       <select 
+                         className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                         value={attendanceConfig.day}
+                         onChange={(e) => setAttendanceConfig({...attendanceConfig, day: e.target.value})}
+                       >
+                         <option value="">Select Day</option>
+                         <option value="Monday">Monday</option>
+                         <option value="Tuesday">Tuesday</option>
+                         <option value="Wednesday">Wednesday</option>
+                         <option value="Thursday">Thursday</option>
+                         <option value="Friday">Friday</option>
+                         <option value="Saturday">Saturday</option>
+                         <option value="Sunday">Sunday</option>
+                       </select>
+                     </div>
+                     <div className="space-y-2">
+                       <Label>Date</Label>
+                       <Input type="date" value={attendanceConfig.date} onChange={(e) => setAttendanceConfig({...attendanceConfig, date: e.target.value})} />
+                     </div>
+                     <div className="space-y-2">
+                       <Label>Time</Label>
+                       <Input type="time" value={attendanceConfig.time} onChange={(e) => setAttendanceConfig({...attendanceConfig, time: e.target.value})} />
+                     </div>
+                  </div>
+                  <Button 
+                     onClick={() => {
+                       if (!attendanceConfig.day || !attendanceConfig.date || !attendanceConfig.time) {
+                         alert("Please fill all day, date, and time fields.");
+                         return;
+                       }
+                       setAttendanceLocked(true);
+                     }}
+                  >
+                    Lock Session & Start Marking
+                  </Button>
+                </div>
+              ) : (
+                <div className="mb-6 p-4 border-green-500/30 border bg-green-500/5 rounded-xl flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-green-600">Session Active</p>
+                    <p className="text-xs text-muted-foreground">Marking attendance for {attendanceConfig.day}, {attendanceConfig.date} at {attendanceConfig.time}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setAttendanceLocked(false)}>Change Details</Button>
+                </div>
+              )}
+
               {students.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/20">No students are currently registered in the database. When students log in and complete setup, they will appear here dynamically.</div>
               ) : (
@@ -473,8 +542,8 @@ function TeacherDashboardContent() {
                           <TableCell className="text-muted-foreground text-xs">{student.registration_no}</TableCell>
                           <TableCell className="text-right space-x-2 whitespace-nowrap">
                              <Button size="sm" variant="outline" onClick={() => openStudentProfile(student)} className="border-primary/30 text-primary h-7 mr-1"><Eye className="w-3 h-3 mr-1"/>View</Button>
-                             <Button size="sm" variant="secondary" onClick={() => markAttendance(student.id, student.name, 'present')} className="bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border border-green-500/20">Present</Button>
-                             <Button size="sm" variant="secondary" onClick={() => markAttendance(student.id, student.name, 'absent')} className="bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600 border border-red-500/20">Absent</Button>
+                             <Button size="sm" variant="secondary" disabled={!attendanceLocked} onClick={() => markAttendance(student.id, student.name, 'present')} className="bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border border-green-500/20 disabled:opacity-50">Present</Button>
+                             <Button size="sm" variant="secondary" disabled={!attendanceLocked} onClick={() => markAttendance(student.id, student.name, 'absent')} className="bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600 border border-red-500/20 disabled:opacity-50">Absent</Button>
                           </TableCell>
                         </TableRow>
                       ))}

@@ -87,8 +87,42 @@ function DashboardContent() {
          
          const { data: attData } = await supabase.from('attendance_records').select('*').eq('student_id', session.user.id);
          if (attData) setAttendanceRecords(attData);
+
+         // Leaderboard data
+         setCurrentUserId(session.user.id);
+         const { data: allStudents } = await supabase.from('students').select('*');
+         const { data: allAtt } = await supabase.from('attendance_records').select('student_id, status');
+         const { data: allSubs } = await supabase.from('assignment_submissions').select('student_id, score');
+         const { data: allAssignments } = await supabase.from('assignments').select('id');
+
+         if (allStudents) {
+           const totalAssignments = (allAssignments || []).length || 1;
+           const attMap: Record<string, { present: number; total: number }> = {};
+           (allAtt || []).forEach((r: any) => {
+             if (!attMap[r.student_id]) attMap[r.student_id] = { present: 0, total: 0 };
+             attMap[r.student_id].total++;
+             if (r.status === 'present') attMap[r.student_id].present++;
+           });
+           const subMap: Record<string, { count: number; totalScore: number }> = {};
+           (allSubs || []).forEach((s: any) => {
+             if (!subMap[s.student_id]) subMap[s.student_id] = { count: 0, totalScore: 0 };
+             subMap[s.student_id].count++;
+             if (s.score != null) subMap[s.student_id].totalScore += s.score;
+           });
+           const ranked = (allStudents as any[]).map((s) => {
+             const att = attMap[s.id] || { present: 0, total: 0 };
+             const attPct = att.total > 0 ? (att.present / att.total) * 100 : 0;
+             const sub = subMap[s.id] || { count: 0, totalScore: 0 };
+             const subPct = (sub.count / totalAssignments) * 100;
+             const avgScore = sub.count > 0 ? sub.totalScore / sub.count : 0;
+             const cgpa = avgScore > 0 ? (avgScore / 100) * 10 : null;
+             const score = attPct * 0.4 + subPct * 0.4 + (cgpa ? (cgpa / 10) * 100 * 0.2 : 0);
+             return { ...s, attPct: Math.round(attPct), submittedCount: sub.count, cgpa, score: Math.round(score) };
+           }).sort((a, b) => b.score - a.score);
+           setLeaderboard(ranked);
+         }
       }
-      
+
       setLoading(false);
     }
     loadResources();
@@ -614,6 +648,67 @@ function DashboardContent() {
                     })}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="leaderboard">
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Trophy className="w-5 h-5 text-yellow-500" /> Class Leaderboard</CardTitle>
+              <CardDescription>Rankings based on attendance (40%), assignments submitted (40%), and CGPA (20%).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {leaderboard.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground border rounded-lg bg-muted/10">No student data available yet.</div>
+              ) : (
+                <div className="space-y-3">
+                  {leaderboard.map((student, index) => {
+                    const isMe = student.id === currentUserId;
+                    const rankColors = ['text-yellow-500', 'text-slate-400', 'text-amber-600'];
+                    const rankBg = ['bg-yellow-500/10 border-yellow-500/30', 'bg-slate-400/10 border-slate-400/30', 'bg-amber-600/10 border-amber-600/30'];
+                    const rank = index + 1;
+                    return (
+                      <motion.div
+                        key={student.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.04 }}
+                        className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${isMe ? 'border-primary/50 bg-primary/5 shadow-sm' : 'border-border/40 bg-muted/5 hover:bg-muted/20'}`}
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 border ${rank <= 3 ? rankBg[rank - 1] : 'bg-muted/20 border-border/30'} ${rank <= 3 ? rankColors[rank - 1] : 'text-muted-foreground'}`}>
+                          {rank <= 3 ? <Medal className="w-4 h-4" /> : `#${rank}`}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm truncate">{student.name || 'Unknown'}</span>
+                            {isMe && <Badge className="text-[10px] px-1.5 py-0 bg-primary/20 text-primary border-primary/30">You</Badge>}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{student.rollno}</div>
+                        </div>
+                        <div className="hidden sm:flex items-center gap-6 text-center">
+                          <div>
+                            <div className={`text-sm font-bold ${student.attPct < 75 ? 'text-destructive' : 'text-green-500'}`}>{student.attPct}%</div>
+                            <div className="text-[10px] text-muted-foreground">Attendance</div>
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-blue-500">{student.submittedCount}</div>
+                            <div className="text-[10px] text-muted-foreground">Submitted</div>
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold">{student.cgpa != null ? student.cgpa.toFixed(1) : '—'}</div>
+                            <div className="text-[10px] text-muted-foreground">CGPA</div>
+                          </div>
+                        </div>
+                        <div className={`text-right ml-2 flex-shrink-0`}>
+                          <div className={`text-lg font-bold ${rank <= 3 ? rankColors[rank - 1] : 'text-foreground'}`}>{student.score}</div>
+                          <div className="text-[10px] text-muted-foreground">Score</div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>

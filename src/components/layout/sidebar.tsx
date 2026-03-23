@@ -5,19 +5,20 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Suspense } from "react";
-import { 
-  BookOpen, 
-  LayoutDashboard, 
-  FileText, 
-  Users, 
-  BarChart, 
-  Settings, 
-  ChevronLeft, 
+import {
+  BookOpen,
+  LayoutDashboard,
+  FileText,
+  Users,
+  BarChart,
+  Settings,
+  ChevronLeft,
   ChevronRight,
   Bell,
   LogOut,
   Video,
-  Map
+  Map,
+  Trophy
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ function SidebarContent({ role }: SidebarProps) {
     { name: "Progress", href: "/student?tab=progress", match: "progress", icon: BarChart },
     { name: "Roadmap", href: "/student?tab=roadmap", match: "roadmap", icon: Map },
     { name: "Proctor Meets", href: "/student?tab=meets", match: "meets", icon: Video },
+    { name: "Leaderboard", href: "/student?tab=leaderboard", match: "leaderboard", icon: Trophy },
   ];
   
   const links = role === "teacher" ? teacherLinks : finalStudentLinks;
